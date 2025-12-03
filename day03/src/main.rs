@@ -10,8 +10,10 @@ fn parse_input(input: &str) -> Vec<String> {
 }
 
 fn calculate_jolt(bank: &str, num_batteries: usize) -> u64 {
-    let digits = bank.chars().collect::<Vec<_>>();
-    let size = digits.len();
+    let digits = bank
+        .chars()
+        .filter_map(|c| c.to_digit(10))
+        .collect::<Vec<_>>();
 
     // keep list of indices
     let mut indices: Vec<usize> = (0..num_batteries).into_iter().collect();
@@ -19,7 +21,7 @@ fn calculate_jolt(bank: &str, num_batteries: usize) -> u64 {
     // for each battery slot, determine the highest battery from available range
     for pos in 0..num_batteries {
         let mut battery = digits[indices[pos]];
-        let end = size - num_batteries + pos;
+        let end = digits.len() - num_batteries + pos;
 
         for index in (indices[pos] + 1)..=end {
             let new_battery = digits[index];
@@ -34,10 +36,11 @@ fn calculate_jolt(bank: &str, num_batteries: usize) -> u64 {
 
     indices
         .into_iter()
-        .map(|index| digits[index])
-        .collect::<String>()
-        .parse::<u64>()
-        .expect("Failed to produce jolt")
+        .rev()
+        .enumerate()
+        .fold(0_u64, |total, (pos, index)| {
+            total + digits[index] as u64 * 10_u64.pow(pos as u32)
+        })
 }
 
 fn process(banks: &[String], batteries: usize) -> u64 {
