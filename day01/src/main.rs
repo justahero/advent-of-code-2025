@@ -55,7 +55,6 @@ fn main() {
     println!("PASSWORD: {}", result);
     let result = rotate_second(50, &rotations);
     println!("PASSWORD: {}", result);
-    // 6676 is too low
 }
 
 #[cfg(test)]
