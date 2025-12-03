@@ -16,8 +16,8 @@ fn parse_input(input: &str) -> Vec<i32> {
         .collect::<Vec<_>>()
 }
 
-/// Apply rotations, count the number of times the dial is exactly at zero.
-fn rotate_list(start_dial: i32, rotations: Vec<i32>) -> i32 {
+/// Count the number of times the dial is exactly at zero.
+fn rotate_first(start_dial: i32, rotations: &[i32]) -> i32 {
     let mut zeroes = 0;
 
     let mut current = start_dial;
@@ -31,15 +31,36 @@ fn rotate_list(start_dial: i32, rotations: Vec<i32>) -> i32 {
     zeroes
 }
 
+/// Count the number of times the dial passes zero and stays on zero.
+fn rotate_second(start_dial: i32, rotations: &[i32]) -> i32 {
+    let mut zeroes = 0;
+
+    let mut current = start_dial;
+    for rotation in rotations {
+        let updated = current + rotation;
+        if current != 0 && updated <= 0 {
+            zeroes += 1;
+        }
+
+        current = updated.rem_euclid(100);
+        zeroes += (updated / 100).abs();
+    }
+
+    zeroes
+}
+
 fn main() {
     let rotations = parse_input(include_str!("input.txt"));
-    let result = rotate_list(50, rotations);
+    let result = rotate_first(50, &rotations);
     println!("PASSWORD: {}", result);
+    let result = rotate_second(50, &rotations);
+    println!("PASSWORD: {}", result);
+    // 6676 is too low
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse_input, rotate_list};
+    use crate::{parse_input, rotate_first, rotate_second};
 
     #[test]
     fn example_works() {
@@ -56,6 +77,13 @@ mod tests {
             L82
         ";
         let rotations = parse_input(input);
-        assert_eq!(3, rotate_list(50, rotations));
+        assert_eq!(3, rotate_first(50, &rotations));
+        assert_eq!(6, rotate_second(50, &rotations));
+    }
+
+    #[test]
+    fn check_bounds() {
+        assert_eq!(1, rotate_second(50, &[-100]));
+        assert_eq!(10, rotate_second(50, &[1000]));
     }
 }
