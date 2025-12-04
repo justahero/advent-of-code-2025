@@ -12,7 +12,7 @@ impl Pos {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Floor {
     width: i32,
     height: i32,
@@ -20,12 +20,51 @@ struct Floor {
 }
 
 impl Floor {
+    const EMPTY: u8 = b'.';
+    const ROLL: u8 = b'@';
+
     pub fn new() -> Self {
         Self {
             width: 0,
             height: 0,
             lines: Vec::new(),
         }
+    }
+
+    /// Find all locations a forklift can move to.
+    ///
+    /// A forklift can only be placed on a tile with a roll on it.
+    pub fn find_locations(&self) -> Vec<Pos> {
+        let mut forklifts = Vec::new();
+        for y in 0..self.height() {
+            for x in 0..self.width() {
+                let tile = self.get(x, y);
+                if let Some(Self::ROLL) = tile {
+                    let count = self
+                        .neighbors(x, y)
+                        .iter()
+                        .filter(|(_, tile)| *tile == Self::ROLL)
+                        .count();
+                    if count < 4 {
+                        forklifts.push(Pos::new(x, y));
+                    }
+                }
+            }
+        }
+        forklifts
+    }
+
+    /// Remove all forklift location from the new Floor.
+    pub fn build_updated_floor(&self, forklifts: Vec<Pos>) -> Floor {
+        let mut floor = self.clone();
+
+        for Pos { x, y } in forklifts {
+            if let Some(tile) = floor.get_mut(x, y) {
+                *tile = Self::EMPTY;
+            }
+        }
+
+        floor
     }
 
     pub fn add_row(&mut self, mut line: Vec<u8>) {
@@ -73,6 +112,14 @@ impl Floor {
             None
         }
     }
+
+    fn get_mut(&mut self, x: i32, y: i32) -> Option<&mut u8> {
+        if 0 <= x && x < self.width as i32 && 0 <= y && y < self.height as i32 {
+            self.lines.get_mut((y * self.width + x) as usize)
+        } else {
+            None
+        }
+    }
 }
 
 fn parse_input(input: &str) -> Floor {
@@ -90,31 +137,36 @@ fn parse_input(input: &str) -> Floor {
 }
 
 fn process_part1(floor: Floor) -> usize {
-    let mut forklifts = Vec::new();
-    for y in 0..floor.height() {
-        for x in 0..floor.width() {
-            let tile = floor.get(x, y);
-            // A forklift can only be placed on a tile with a roll on it
-            if let Some(b'@') = tile {
-                let neighbors = floor.neighbors(x, y);
-                let count = neighbors.iter().filter(|(_, tile)| *tile == b'@').count();
-                if count < 4 {
-                    forklifts.push(Pos::new(x, y));
-                }
-            }
+    floor.find_locations().len()
+}
+
+fn process_part2(mut floor: Floor) -> usize {
+    let mut total = 0;
+
+    loop {
+        let forklifts = floor.find_locations();
+        if forklifts.is_empty() {
+            break;
         }
+
+        total += forklifts.len();
+        floor = floor.build_updated_floor(forklifts);
     }
-    forklifts.len()
+
+    total
 }
 
 fn main() {
     let floor = parse_input(include_str!("input.txt"));
-    let result = process_part1(floor);
+    let result = process_part1(floor.clone());
+    println!("PART 1: {}", result);
+    let result = process_part2(floor);
+    println!("PART 2: {}", result);
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse_input, process_part1};
+    use crate::{parse_input, process_part1, process_part2};
 
     const INPUT: &str = r#"
         ..@@.@@@@.
@@ -140,5 +192,11 @@ mod tests {
     fn check_part1() {
         let floor = parse_input(INPUT);
         assert_eq!(13, process_part1(floor));
+    }
+
+    #[test]
+    fn check_part2() {
+        let floor = parse_input(INPUT);
+        assert_eq!(43, process_part2(floor));
     }
 }
