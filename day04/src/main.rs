@@ -54,17 +54,13 @@ impl Floor {
         forklifts
     }
 
-    /// Remove all forklift location from the new Floor.
-    pub fn build_updated_floor(&self, forklifts: Vec<Pos>) -> Floor {
-        let mut floor = self.clone();
-
+    /// Mark all forklift locations as empty.
+    pub fn update_floor(&mut self, forklifts: Vec<Pos>) {
         for Pos { x, y } in forklifts {
-            if let Some(tile) = floor.get_mut(x, y) {
+            if let Some(tile) = self.get_mut(x, y) {
                 *tile = Self::EMPTY;
             }
         }
-
-        floor
     }
 
     pub fn add_row(&mut self, mut line: Vec<u8>) {
@@ -150,7 +146,7 @@ fn process_part2(mut floor: Floor) -> usize {
         }
 
         total += forklifts.len();
-        floor = floor.build_updated_floor(forklifts);
+        floor.update_floor(forklifts);
     }
 
     total
