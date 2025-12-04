@@ -1,0 +1,10 @@
+[package]
+name = "aoc-2025-day-04"
+version = "0.1.0"
+authors = ["Sebastian Ziebell <sebastian.ziebell@gmail.com"]
+edition = "2024"
+publish = false
+
+[dependencies]
+anyhow = "1.0.100"
+# itertools = "0.10"
