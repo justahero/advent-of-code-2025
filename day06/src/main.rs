@@ -65,8 +65,7 @@ impl Equation {
     }
 }
 
-fn process_part1(input: &str) -> u64 {
-    let blocks = parse_blocks(input);
+fn process_part1(blocks: &[Block]) -> u64 {
     let equations = convert_part1(blocks);
     equations.iter().map(Equation::calculate_total).sum::<u64>()
 }
@@ -102,7 +101,7 @@ fn parse_blocks(input: &str) -> Vec<Block> {
     result
 }
 
-fn convert_part1(blocks: Vec<Block>) -> Vec<Equation> {
+fn convert_part1(blocks: &[Block]) -> Vec<Equation> {
     let mut equations = Vec::new();
 
     for block in blocks {
@@ -114,7 +113,7 @@ fn convert_part1(blocks: Vec<Block>) -> Vec<Equation> {
     equations
 }
 
-fn convert_part2(blocks: Vec<Block>) -> Vec<Equation> {
+fn convert_part2(blocks: &[Block]) -> Vec<Equation> {
     let mut equations = Vec::new();
 
     for block in blocks {
@@ -126,17 +125,16 @@ fn convert_part2(blocks: Vec<Block>) -> Vec<Equation> {
     equations
 }
 
-fn process_part2(input: &str) -> u64 {
-    let blocks = parse_blocks(input);
+fn process_part2(blocks: &[Block]) -> u64 {
     let equations = convert_part2(blocks);
     equations.iter().map(Equation::calculate_total).sum::<u64>()
 }
 
 fn main() {
-    let input = include_str!("input.txt");
-    let result = process_part1(input);
+    let blocks = parse_blocks(include_str!("input.txt"));
+    let result = process_part1(&blocks);
     println!("PART 1: {}", result);
-    let result = process_part2(input);
+    let result = process_part2(&blocks);
     println!("PART 2: {}", result);
 }
 
@@ -152,12 +150,14 @@ mod tests {
 
     #[test]
     fn test_part1() {
-        assert_eq!(4277556, process_part1(INPUT));
+        let blocks = parse_blocks(INPUT);
+        assert_eq!(4277556, process_part1(&blocks));
     }
 
     #[test]
     fn test_part2() {
-        let result = process_part2(INPUT);
+        let blocks = parse_blocks(INPUT);
+        let result = process_part2(&blocks);
         assert_eq!(3263827, result);
     }
 
