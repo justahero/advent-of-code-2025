@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+const SPACE: u8 = b' ';
 
 #[derive(Debug)]
 struct Equation {
@@ -34,7 +34,6 @@ impl Block {
 
     /// Parse all values from columns and returns them.
     pub fn col_values(&self) -> anyhow::Result<Vec<u64>> {
-        println!("MATRIX: {:?}", self.matrix);
         let rows = self.matrix.len();
         let mut result = Vec::new();
 
@@ -43,7 +42,6 @@ impl Block {
                 .map(|row| self.matrix[row][col])
                 .collect::<Vec<_>>();
             let value = str::from_utf8(&value)?.trim().parse::<u64>()?;
-            println!("  value: {}", value);
             result.push(value);
         }
 
@@ -61,55 +59,14 @@ impl Equation {
     }
 }
 
-fn parse_numbers(line: &str) -> anyhow::Result<Vec<u64>> {
-    Ok(line
-        .split_ascii_whitespace()
-        .map(|item| item.parse::<u64>())
-        .collect::<Result<Vec<_>, _>>()?)
-}
-
-fn parse_ops(line: &str) -> anyhow::Result<Vec<u8>> {
-    Ok(line
-        .split_ascii_whitespace()
-        .map(|item| match item {
-            "*" => Ok(b'*'),
-            "+" => Ok(b'+'),
-            _ => Err(anyhow!("Failed to parse char")),
-        })
-        .collect::<Result<Vec<_>, _>>()?)
-}
-
-// TODO: remove this function, merge with "parse_second"
-fn parse_input(input: &str) -> Vec<Equation> {
-    // read in all numbers / tokens
-    let mut numbers: Vec<Vec<u64>> = Vec::new();
-    let mut operations: Vec<u8> = Vec::new();
-
-    for line in input.lines().filter(|line| !line.is_empty()) {
-        if let Ok(result) = parse_numbers(line) {
-            numbers.push(result);
-        } else if let Ok(result) = parse_ops(line) {
-            operations = result;
-        }
-    }
-
-    // Transpose columns / rows
-    let mut result = Vec::new();
-    for (index, op) in operations.iter().enumerate() {
-        let numbers = numbers.iter().map(|row| row[index]).collect::<Vec<_>>();
-        result.push(Equation { numbers, op: *op });
-    }
-    result
-}
-
-fn process_part1(equations: &[Equation]) -> u64 {
+fn process_part1(input: &str) -> u64 {
+    let blocks = parse_blocks(input);
+    let equations = convert_part1(blocks);
     equations.iter().map(Equation::calculate_total).sum::<u64>()
 }
 
-const SPACE: u8 = b' ';
-
 /// Ignore error handling
-fn parse_second(input: &str) -> Vec<Block> {
+fn parse_blocks(input: &str) -> Vec<Block> {
     let mut result = Vec::new();
     let lines = input
         .lines()
@@ -127,7 +84,6 @@ fn parse_second(input: &str) -> Vec<Block> {
                 .into_iter()
                 .map(|row| lines[row][col..new_col].to_vec())
                 .collect::<Vec<_>>();
-            dbg!(&matrix);
             let matrix = Block { matrix };
             result.push(matrix);
             col = new_col + 1;
@@ -144,10 +100,21 @@ fn parse_second(input: &str) -> Vec<Block> {
     result
 }
 
+fn convert_part1(blocks: Vec<Block>) -> Vec<Equation> {
+    let mut equations = Vec::new();
+
+    for block in blocks {
+        let numbers = block.row_values().expect("Failed to parse values");
+        let op = block.op().unwrap();
+        equations.push(Equation { numbers, op });
+    }
+
+    equations
+}
+
 fn convert_part2(blocks: Vec<Block>) -> Vec<Equation> {
     let mut equations = Vec::new();
 
-    // Convert each block into the appropriate equation
     for block in blocks {
         let numbers = block.col_values().expect("Failed to parse values");
         let op = block.op().unwrap();
@@ -158,22 +125,22 @@ fn convert_part2(blocks: Vec<Block>) -> Vec<Equation> {
 }
 
 fn process_part2(input: &str) -> u64 {
-    let blocks = parse_second(input);
+    let blocks = parse_blocks(input);
     let equations = convert_part2(blocks);
     equations.iter().map(Equation::calculate_total).sum::<u64>()
 }
 
 fn main() {
-    let input = parse_input(include_str!("input.txt"));
-    let result = process_part1(&input);
+    let input = include_str!("input.txt");
+    let result = process_part1(input);
     println!("PART 1: {}", result);
+    let result = process_part2(input);
+    println!("PART 2: {}", result);
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        parse_input, parse_numbers, parse_ops, parse_second, process_part1, process_part2,
-    };
+    use crate::{parse_blocks, process_part1, process_part2};
 
     const INPUT: &str = r#"
 123 328  51 64 
@@ -182,17 +149,8 @@ mod tests {
 *   +   *   +  "#;
 
     #[test]
-    fn test_parse_methods() {
-        assert!(parse_numbers("123 328  51 64").is_ok());
-        assert!(parse_numbers("*   +   *   +").is_err());
-        assert!(parse_ops("123 328  51 64").is_err());
-        assert!(parse_ops("*   +   *   +").is_ok());
-    }
-
-    #[test]
     fn test_part1() {
-        let equations = parse_input(INPUT);
-        assert_eq!(4277556, process_part1(&equations));
+        assert_eq!(4277556, process_part1(INPUT));
     }
 
     #[test]
@@ -203,7 +161,7 @@ mod tests {
 
     #[test]
     fn test_parse_blocks() {
-        let blocks = parse_second(INPUT);
+        let blocks = parse_blocks(INPUT);
         assert_eq!(4, blocks.len());
 
         let block = &blocks[0];
