@@ -141,22 +141,24 @@ fn process_part1(mut grid: Grid) -> u64 {
                 _ => (),
             }
         }
-
-        // println!("GRID:\n{}", grid);
     }
 
-    // TODO: apply graph algorithm
     total_splits
+}
+
+fn process_part2(grid: Grid) -> u64 {
+    0
 }
 
 fn main() {
     let grid = parse_input(include_str!("input.txt"));
     let result = process_part1(grid);
+    println!("PART1: {}", result);
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{Pos, parse_input, process_part1};
+    use crate::{Pos, parse_input, process_part1, process_part2};
 
     const INPUT: &str = r#"
 .......S.......
@@ -189,5 +191,11 @@ mod tests {
         let grid = parse_input(INPUT);
         assert_eq!(Some(&Pos::new(7, 0)), grid.start());
         assert_eq!(21, process_part1(grid));
+    }
+
+    #[test]
+    fn test_process_part2() {
+        let grid = parse_input(INPUT);
+        assert_eq!(21, process_part2(grid));
     }
 }
