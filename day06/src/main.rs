@@ -14,8 +14,7 @@ struct Block {
 impl Block {
     /// Returns the operator, expected to be in the last row
     pub fn op(&self) -> Option<u8> {
-        let length = self.matrix.len();
-        self.matrix[length - 1]
+        self.matrix[self.num_rows()]
             .iter()
             .find(|byte| **byte != SPACE)
             .cloned()
@@ -23,29 +22,36 @@ impl Block {
 
     /// Parse all values from rows and returns them.
     pub fn row_values(&self) -> anyhow::Result<Vec<u64>> {
-        let mut result = Vec::new();
-        let num_columns = self.matrix.len() - 1;
-        for index in 0..num_columns {
-            let value = str::from_utf8(&self.matrix[index])?.trim().parse::<u64>()?;
-            result.push(value);
-        }
-        Ok(result)
+        (0..self.num_rows())
+            .map(|row| self.row(row))
+            .collect::<anyhow::Result<Vec<_>>>()
     }
 
     /// Parse all values from columns and returns them.
     pub fn col_values(&self) -> anyhow::Result<Vec<u64>> {
-        let rows = self.matrix.len();
-        let mut result = Vec::new();
+        (0..self.num_columns())
+            .map(|col| self.col(col))
+            .collect::<anyhow::Result<Vec<_>>>()
+    }
 
-        for col in 0..self.matrix[0].len() {
-            let value = (0..rows - 1)
-                .map(|row| self.matrix[row][col])
-                .collect::<Vec<_>>();
-            let value = str::from_utf8(&value)?.trim().parse::<u64>()?;
-            result.push(value);
-        }
+    fn row(&self, row: usize) -> anyhow::Result<u64> {
+        Ok(str::from_utf8(&self.matrix[row])?.trim().parse::<u64>()?)
+    }
 
-        Ok(result)
+    fn col(&self, column: usize) -> anyhow::Result<u64> {
+        let value = (0..self.num_rows())
+            .map(|row| self.matrix[row][column])
+            .collect::<Vec<_>>();
+        Ok(str::from_utf8(&value)?.trim().parse::<u64>()?)
+    }
+
+    fn num_columns(&self) -> usize {
+        self.matrix[0].len()
+    }
+
+    /// Returns the number of rows that contain values, except the operator
+    fn num_rows(&self) -> usize {
+        self.matrix.len() - 1
     }
 }
 
@@ -71,31 +77,27 @@ fn parse_blocks(input: &str) -> Vec<Block> {
     let lines = input
         .lines()
         .filter(|line| !line.is_empty())
-        .map(|line| line.as_bytes().to_vec())
+        .map(|line| line.as_bytes())
         .collect::<Vec<_>>();
     let rows = lines.len();
 
-    // TODO: refactor this block
-    // group all connected columns, keep white spaces
     let mut col = 0;
     for new_col in 0..lines[0].len() {
-        if (0..rows).all(|row| lines[row][new_col] == SPACE) {
-            let matrix = (0..rows)
-                .into_iter()
-                .map(|row| lines[row][col..new_col].to_vec())
-                .collect::<Vec<_>>();
-            let matrix = Block { matrix };
-            result.push(matrix);
-            col = new_col + 1;
-        }
-    }
+        let new_col = if (0..rows).all(|row| lines[row][new_col] == SPACE) {
+            new_col
+        } else if new_col == lines[0].len() - 1 {
+            lines[0].len()
+        } else {
+            continue;
+        };
 
-    let matrix = (0..rows)
-        .into_iter()
-        .map(|row| lines[row][col..lines[0].len()].to_vec())
-        .collect::<Vec<_>>();
-    let matrix = Block { matrix };
-    result.push(matrix);
+        let matrix = (0..rows)
+            .map(|row| lines[row][col..new_col].to_vec())
+            .collect::<Vec<_>>();
+
+        result.push(Block { matrix });
+        col = new_col + 1;
+    }
 
     result
 }
