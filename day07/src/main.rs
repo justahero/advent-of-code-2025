@@ -2,14 +2,17 @@
 #![allow(unused_variables)]
 #![allow(unused_mut)]
 
-use std::fmt::{Display, Formatter, Result};
+use std::{
+    collections::HashMap,
+    fmt::{Display, Formatter, Result},
+};
 
 const EMPTY: u8 = b'.';
 const START: u8 = b'S';
 const SPLITTER: u8 = b'^';
 const BEAM: u8 = b'|';
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 struct Pos {
     x: i32,
     y: i32,
@@ -146,14 +149,49 @@ fn process_part1(mut grid: Grid) -> u64 {
     total_splits
 }
 
+fn traverse(grid: &Grid, cache: &mut HashMap<Pos, u64>, x: i32, y: i32) -> u64 {
+    let pos = Pos::new(x, y + 1);
+    match grid.get(pos) {
+        Some(b'.') => {
+            return traverse(grid, cache, x, y + 1);
+        }
+        Some(b'^') => {
+            let left = Pos::new(x - 1, y);
+            let left = if let Some(value) = cache.get(&left) {
+                *value
+            } else {
+                let value = traverse(grid, cache, x - 1, y);
+                cache.insert(left, value);
+                value
+            };
+
+            let right = Pos::new(x + 1, y);
+            let right = if let Some(value) = cache.get(&right) {
+                *value
+            } else {
+                let value = traverse(grid, cache, x + 1, y);
+                cache.insert(right, value);
+                value
+            };
+
+            return left + right;
+        }
+        _ => 1,
+    }
+}
+
 fn process_part2(grid: Grid) -> u64 {
-    0
+    let mut cache = HashMap::new();
+    let start = grid.start().expect("Failed to find start");
+    traverse(&grid, &mut cache, start.x, start.y)
 }
 
 fn main() {
     let grid = parse_input(include_str!("input.txt"));
-    let result = process_part1(grid);
-    println!("PART1: {}", result);
+    let result = process_part1(grid.clone());
+    println!("PART 1: {}", result);
+    let result = process_part2(grid);
+    println!("PART 2: {}", result);
 }
 
 #[cfg(test)]
@@ -196,6 +234,6 @@ mod tests {
     #[test]
     fn test_process_part2() {
         let grid = parse_input(INPUT);
-        assert_eq!(21, process_part2(grid));
+        assert_eq!(40, process_part2(grid));
     }
 }
