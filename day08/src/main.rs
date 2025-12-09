@@ -5,6 +5,8 @@ use std::{
     str::FromStr,
 };
 
+use itertools::Itertools;
+
 type Pair = (usize, usize);
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -84,37 +86,47 @@ fn parse(input: &str) -> Vec<Vec3> {
 /// Connect junctions by shortest distance, group them into circuits.
 ///
 /// Keep list of all circuits, stop when the given number of connections have been reached.
-fn process_part1(junctions: &[Vec3], max_pairs: usize, largest: usize) -> u64 {
+fn process_part1(junctions: &[Vec3], num_pairs: usize, largest: usize) -> u64 {
+    println!("PROCESS max-pairs: {}", num_pairs);
+
     // Generate all pairings, sorted by distance between positions
-    let mut pairings: Vec<(u64, Pair)> = Vec::new();
-    for l in 0..junctions.len() - 1 {
-        let lhs = &junctions[l];
-        for r in l + 1..junctions.len() {
-            let rhs = &junctions[r];
-            let distance = rhs.distance_squared(lhs);
-            pairings.push((distance, (l, r)));
-        }
-    }
-    pairings.sort_by(|(left, _), (right, _)| left.cmp(right));
+    let pairings = junctions
+        .iter()
+        .tuple_combinations()
+        .map(|(l, r)| (l.distance_squared(r), (l, r)))
+        .sorted_by(|l, r| l.0.partial_cmp(&r.0).unwrap())
+        .take(num_pairs)
+        .collect::<Vec<_>>();
 
     // Collect all circuits.
     let mut circuits: Vec<Vec<Vec3>> = Vec::new();
-    for (_, (l, r)) in pairings.into_iter().take(max_pairs) {
-        let lhs = &junctions[l];
-        let rhs = &junctions[r];
+    for (_, (lhs, rhs)) in pairings.into_iter() {
+        let left = circuits.iter().position(|c| c.contains(lhs));
+        let right = circuits.iter().position(|c| c.contains(rhs));
 
-        if let Some(circuit) = circuits.iter_mut().find(|circuit| circuit.contains(&lhs)) {
-            circuit.push(lhs.clone());
-        } else if let Some(circuit) = circuits.iter_mut().find(|circuit| circuit.contains(&rhs)) {
-            circuit.push(rhs.clone());
-        } else {
-            circuits.push(vec![lhs.clone(), rhs.clone()]);
+        match (left, right) {
+            (Some(l), None) => {
+                circuits[l].push(rhs.clone());
+            }
+            (None, Some(r)) => {
+                circuits[r].push(lhs.clone());
+            }
+            (Some(l), Some(r)) => {
+                if l != r {
+                    let other = circuits[r].clone();
+                    circuits[l].extend(other);
+                    circuits.remove(r);
+                }
+            }
+            (None, None) => {
+                circuits.push(vec![lhs.clone(), rhs.clone()]);
+            }
         }
     }
 
-    circuits.sort_by(|l, r| r.len().cmp(&l.len()));
     circuits
         .into_iter()
+        .sorted_by(|l, r| r.len().cmp(&l.len()))
         .take(largest)
         .map(|circuit| circuit.len() as u64)
         .product()
@@ -124,7 +136,6 @@ fn main() {
     let junctions = parse(include_str!("input.txt"));
     let result = process_part1(&junctions, 1000, 3);
     println!("PART 1: {}", result);
-    // 720 too low
 }
 
 #[cfg(test)]
