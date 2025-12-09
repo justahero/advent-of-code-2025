@@ -87,8 +87,6 @@ fn parse(input: &str) -> Vec<Vec3> {
 ///
 /// Keep list of all circuits, stop when the given number of connections have been reached.
 fn process_part1(junctions: &[Vec3], num_pairs: usize, largest: usize) -> u64 {
-    println!("PROCESS max-pairs: {}", num_pairs);
-
     // Generate all pairings, sorted by distance between positions
     let pairings = junctions
         .iter()
@@ -98,28 +96,29 @@ fn process_part1(junctions: &[Vec3], num_pairs: usize, largest: usize) -> u64 {
         .collect::<Vec<_>>();
 
     // Collect all circuits.
-    let mut circuits: Vec<Vec<Vec3>> = Vec::new();
+    let mut circuits: Vec<Vec<&Vec3>> = junctions.iter().map(|j| vec![j]).collect_vec();
     for (_, (lhs, rhs)) in pairings.into_iter().take(num_pairs) {
-        let left = circuits.iter().position(|c| c.contains(lhs));
-        let right = circuits.iter().position(|c| c.contains(rhs));
+        let left = circuits.iter().position(|c| c.contains(&lhs));
+        let right = circuits.iter().position(|c| c.contains(&rhs));
 
         match (left, right) {
             (Some(l), None) => {
-                circuits[l].push(rhs.clone());
+                circuits[l].push(rhs);
             }
             (None, Some(r)) => {
-                circuits[r].push(lhs.clone());
+                circuits[r].push(lhs);
             }
             (Some(l), Some(r)) => {
                 if l != r {
                     let other = circuits[r].clone();
                     circuits[l].extend(other);
-                    circuits.remove(r);
+                    circuits.swap_remove(r);
+                    if circuits.len() == 1 {
+                        break;
+                    }
                 }
             }
-            (None, None) => {
-                circuits.push(vec![lhs.clone(), rhs.clone()]);
-            }
+            _ => (),
         }
     }
 
@@ -139,33 +138,32 @@ fn process_part2(junctions: &[Vec3]) -> u64 {
         .sorted_by(|l, r| l.0.partial_cmp(&r.0).unwrap())
         .collect::<Vec<_>>();
 
-    let mut last_merged_pair: Option<(Vec3, Vec3)> = None;
-    let mut circuits: Vec<Vec<Vec3>> = junctions.iter().map(|j| vec![j.clone()]).collect_vec();
+    let mut last_merged_pair: Option<(&Vec3, &Vec3)> = None;
+    let mut circuits: Vec<Vec<&Vec3>> = junctions.iter().map(|j| vec![j]).collect_vec();
 
     for (_, (lhs, rhs)) in pairings.into_iter() {
-        let left = circuits.iter().position(|c| c.contains(lhs));
-        let right = circuits.iter().position(|c| c.contains(rhs));
+        let left = circuits.iter().position(|c| c.contains(&lhs));
+        let right = circuits.iter().position(|c| c.contains(&rhs));
 
         match (left, right) {
             (Some(l), None) => {
-                circuits[l].push(rhs.clone());
+                circuits[l].push(rhs);
             }
             (None, Some(r)) => {
-                circuits[r].push(lhs.clone());
+                circuits[r].push(lhs);
             }
             (Some(l), Some(r)) => {
                 if l != r {
                     let other = circuits[r].clone();
                     circuits[l].extend(other);
-                    circuits.remove(r);
+                    circuits.swap_remove(r);
                     if circuits.len() == 1 {
-                        last_merged_pair = Some((lhs.clone(), rhs.clone()));
+                        last_merged_pair = Some((lhs, rhs));
+                        break;
                     }
                 }
             }
-            (None, None) => {
-                circuits.push(vec![lhs.clone(), rhs.clone()]);
-            }
+            _ => (),
         }
     }
 
