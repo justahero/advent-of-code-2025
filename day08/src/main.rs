@@ -95,12 +95,11 @@ fn process_part1(junctions: &[Vec3], num_pairs: usize, largest: usize) -> u64 {
         .tuple_combinations()
         .map(|(l, r)| (l.distance_squared(r), (l, r)))
         .sorted_by(|l, r| l.0.partial_cmp(&r.0).unwrap())
-        .take(num_pairs)
         .collect::<Vec<_>>();
 
     // Collect all circuits.
     let mut circuits: Vec<Vec<Vec3>> = Vec::new();
-    for (_, (lhs, rhs)) in pairings.into_iter() {
+    for (_, (lhs, rhs)) in pairings.into_iter().take(num_pairs) {
         let left = circuits.iter().position(|c| c.contains(lhs));
         let right = circuits.iter().position(|c| c.contains(rhs));
 
@@ -132,15 +131,62 @@ fn process_part1(junctions: &[Vec3], num_pairs: usize, largest: usize) -> u64 {
         .product()
 }
 
+fn process_part2(junctions: &[Vec3]) -> u64 {
+    let pairings = junctions
+        .iter()
+        .tuple_combinations()
+        .map(|(l, r)| (l.distance_squared(r), (l, r)))
+        .sorted_by(|l, r| l.0.partial_cmp(&r.0).unwrap())
+        .collect::<Vec<_>>();
+
+    let mut last_merged_pair: Option<(Vec3, Vec3)> = None;
+    let mut circuits: Vec<Vec<Vec3>> = junctions.iter().map(|j| vec![j.clone()]).collect_vec();
+
+    for (_, (lhs, rhs)) in pairings.into_iter() {
+        let left = circuits.iter().position(|c| c.contains(lhs));
+        let right = circuits.iter().position(|c| c.contains(rhs));
+
+        match (left, right) {
+            (Some(l), None) => {
+                circuits[l].push(rhs.clone());
+            }
+            (None, Some(r)) => {
+                circuits[r].push(lhs.clone());
+            }
+            (Some(l), Some(r)) => {
+                if l != r {
+                    let other = circuits[r].clone();
+                    circuits[l].extend(other);
+                    circuits.remove(r);
+                    if circuits.len() == 1 {
+                        last_merged_pair = Some((lhs.clone(), rhs.clone()));
+                    }
+                }
+            }
+            (None, None) => {
+                circuits.push(vec![lhs.clone(), rhs.clone()]);
+            }
+        }
+    }
+
+    if let Some((l, r)) = last_merged_pair {
+        l.x as u64 * r.x as u64
+    } else {
+        0
+    }
+}
+
 fn main() {
     let junctions = parse(include_str!("input.txt"));
     let result = process_part1(&junctions, 1000, 3);
     println!("PART 1: {}", result);
+    let result = process_part2(&junctions);
+    println!("PART 2: {}", result);
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse, process_part1};
+    use crate::{parse, process_part1, process_part2};
 
     const INPUT: &str = r#"
 162,817,812
@@ -175,5 +221,11 @@ mod tests {
     fn test_part1() {
         let junctions = parse(INPUT);
         assert_eq!(40, process_part1(&junctions, 10, 3));
+    }
+
+    #[test]
+    fn test_part2() {
+        let junctions = parse(INPUT);
+        assert_eq!(25272, process_part2(&junctions));
     }
 }
