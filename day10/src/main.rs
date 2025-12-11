@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{collections::VecDeque, fmt::Display, ops::Shl};
+use std::collections::{BTreeMap, VecDeque};
 
 use nom::{
     IResult, Parser,
@@ -11,49 +11,19 @@ use nom::{
     sequence::delimited,
 };
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-struct BitVec(u16);
-
-impl BitVec {
-    pub fn new(bits: &[u8]) -> Self {
-        let bits = bits.iter().fold(0u16, |mut bits, index| {
-            debug_assert!(*index < 16);
-            bits |= 1u16.shl(index);
-            bits
-        });
-        Self(bits)
-    }
-
-    pub fn bits(&self) -> u16 {
-        self.0
-    }
-
-    pub fn toggle(&self, rhs: &BitVec) -> Self {
-        Self(self.0 ^ rhs.0)
-    }
-}
-
-impl Display for BitVec {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:#08b}", self.0)
-    }
-}
-
 struct Machine {
     // [.##.]
-    lights: BitVec,
+    lights: Vec<i16>,
     // (3) (1,3) (2) (2,3) (0,2) (0,1)
-    buttons: Vec<BitVec>,
+    buttons: Vec<Vec<i16>>,
     // joltage requirements
     joltage: Vec<i16>,
 }
 
 impl Machine {
-    const INITIAL_LIGHTS: BitVec = BitVec(0);
-
-    pub fn new(lights: Vec<u8>, buttons: Vec<BitVec>, joltage: Vec<i16>) -> Self {
+    pub fn new(lights: Vec<i16>, buttons: Vec<Vec<i16>>, joltage: Vec<i16>) -> Self {
         Self {
-            lights: BitVec::new(&lights),
+            lights,
             buttons,
             joltage,
         }
@@ -61,7 +31,8 @@ impl Machine {
 
     /// Determine the number of fewest presses to match the indicator lights, e.g. `[.##.]`.
     pub fn light_presses(&self) -> u32 {
-        let mut queue: VecDeque<(u32, BitVec)> = VecDeque::from([(0, Self::INITIAL_LIGHTS)]);
+        let mut queue: VecDeque<(u32, Vec<i16>)> =
+            VecDeque::from([(0, vec![0; self.lights.len()])]);
 
         loop {
             // get first element
@@ -74,7 +45,17 @@ impl Machine {
 
             // otherwise press each buttons combination and store to queue.
             for button in self.buttons.iter() {
-                queue.push_back((level + 1, lights.toggle(button)));
+                let lights = button.iter().fold(lights.clone(), |mut lights, index| {
+                    if let Some(entry) = lights.get_mut(*index as usize) {
+                        if *entry == 1 {
+                            *entry = 0;
+                        } else {
+                            *entry = 1;
+                        }
+                    }
+                    lights
+                });
+                queue.push_back((level + 1, lights));
             }
         }
     }
@@ -82,28 +63,48 @@ impl Machine {
     pub fn joltage_presses(&self) -> u32 {
         let target = vec![0; self.joltage.len()];
         let mut queue: VecDeque<(u32, Vec<i16>)> = VecDeque::from([(0, self.joltage.clone())]);
+        let mut cache: BTreeMap<Vec<i16>, u32> = BTreeMap::new();
+        let mut num_cache_hits = 0;
 
         loop {
             let (level, joltage) = queue.pop_front().expect("Failed to find joltage");
-            println!("  level: {}", level);
 
             // check if joltage matches target
             if target == joltage {
+                println!("RESULT: {}", level);
                 return level;
             }
+
+            if let Some(existing_level) = cache.get(&joltage) {
+                if *existing_level < level {
+                    num_cache_hits += 1;
+                    println!(
+                        "CACHE HIT: {} - size: {}, level: {}",
+                        num_cache_hits,
+                        queue.len(),
+                        level
+                    );
+                    continue;
+                }
+            }
+            cache.insert(joltage.clone(), level);
 
             // if the joltage misses the target, do not continue
             if joltage.iter().all(|item| *item >= 0) {
                 // update the target joltage per button
                 for button in self.buttons.iter() {
                     let mut new_joltage = joltage.clone();
-                    for index in 0..u16::BITS {
-                        if button.0 & 1u16.shl(index) > 0 {
-                            new_joltage[index as usize] -= 1;
+                    let mut ignore = false;
+                    for index in button.iter() {
+                        new_joltage[*index as usize] -= 1;
+                        if new_joltage[*index as usize] < 0 {
+                            ignore = true;
                         }
                     }
 
-                    queue.push_back((level + 1, new_joltage));
+                    if !ignore {
+                        queue.push_back((level + 1, new_joltage));
+                    }
                 }
             }
         }
@@ -130,19 +131,10 @@ fn parse_machine(line: &str) -> Machine {
         .parse(line)
         .expect("Failed to parse input");
 
-    // convert bits to indices.
-    let lights = lights
-        .iter()
-        .enumerate()
-        .filter(|x| *x.1 > 0)
-        .map(|(index, _)| index as u8)
-        .collect::<Vec<_>>();
-
-    let buttons = buttons.iter().map(|b| BitVec::new(&b)).collect::<Vec<_>>();
     Machine::new(lights, buttons, joltage)
 }
 
-fn parse_lights(input: &str) -> IResult<&str, Vec<u8>> {
+fn parse_lights(input: &str) -> IResult<&str, Vec<i16>> {
     delimited(
         tag("["),
         fold_many1(
@@ -161,14 +153,14 @@ fn parse_lights(input: &str) -> IResult<&str, Vec<u8>> {
     .parse(input)
 }
 
-fn parse_buttons_list(input: &str) -> IResult<&str, Vec<Vec<u8>>> {
+fn parse_buttons_list(input: &str) -> IResult<&str, Vec<Vec<i16>>> {
     separated_list1(space1, parse_buttons).parse(input)
 }
 
-fn parse_buttons(input: &str) -> IResult<&str, Vec<u8>> {
+fn parse_buttons(input: &str) -> IResult<&str, Vec<i16>> {
     delimited(
         tag("("),
-        separated_list1(tag(","), nom::character::complete::u8),
+        separated_list1(tag(","), nom::character::complete::i16),
         tag(")"),
     )
     .parse(input)
@@ -195,14 +187,14 @@ fn main() {
     let machines = parse_input(include_str!("input.txt"));
     let result = process_part1(&machines);
     println!("PART 1: {}", result);
-    // TODO
+    let result = process_part2(&machines);
+    println!("PART 2: {}", result);
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        BitVec, parse_buttons_list, parse_input, parse_joltage, parse_lights, process_part1,
-        process_part2,
+        parse_buttons_list, parse_input, parse_joltage, parse_lights, process_part1, process_part2,
     };
 
     const INPUT: &str = r#"
@@ -210,18 +202,6 @@ mod tests {
 [...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}
 [.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}
     "#;
-
-    #[test]
-    fn test_buttons_constructor() {
-        assert_eq!(0b1001, BitVec::new(&[0, 3]).0);
-    }
-
-    #[test]
-    fn test_buttons_toggle() {
-        let expected = BitVec::new(&[0, 3]);
-        let lights = BitVec::new(&[1, 2]);
-        assert_eq!(expected, lights.toggle(&BitVec::new(&[0, 1, 2, 3])));
-    }
 
     #[test]
     fn test_parse_lights() {
@@ -272,5 +252,12 @@ mod tests {
     fn test_part2() {
         let machines = parse_input(INPUT);
         assert_eq!(33, process_part2(&machines));
+    }
+
+    #[test]
+    fn test_part2_first_machine_from_input() {
+        let input = "[.#.#] (0,2,3) (1,3) (2,3) (0,1,2) (0) {31,4,31,29}";
+        let machines = parse_input(input);
+        assert_eq!(30, machines[0].joltage_presses());
     }
 }
