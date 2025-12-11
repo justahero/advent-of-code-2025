@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::ops::Shl;
+use std::{collections::VecDeque, fmt::Display, ops::Shl};
 
 use nom::{
     IResult, Parser,
@@ -33,17 +33,25 @@ impl BitVec {
     }
 }
 
+impl Display for BitVec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:#08b}", self.0)
+    }
+}
+
 struct Machine {
     // [.##.]
     lights: BitVec,
     // (3) (1,3) (2) (2,3) (0,2) (0,1)
     buttons: Vec<BitVec>,
     // joltage requirements
-    joltage: Vec<u8>,
+    joltage: Vec<u16>,
 }
 
 impl Machine {
-    pub fn new(lights: Vec<u8>, buttons: Vec<BitVec>, joltage: Vec<u8>) -> Self {
+    const INITIAL_LIGHTS: BitVec = BitVec(0);
+
+    pub fn new(lights: Vec<u8>, buttons: Vec<BitVec>, joltage: Vec<u16>) -> Self {
         Self {
             lights: BitVec::new(&lights),
             buttons,
@@ -52,25 +60,24 @@ impl Machine {
     }
 
     /// Determine the number of fewest presses to match the indicator lights, e.g. `[.##.]`.
-    ///
-    /// Initially all lights are off, a sequence with the fewest pressed buttons is calculated.
     pub fn fewest_presses(&self) -> u32 {
-        0
-    }
-}
+        let mut queue: VecDeque<(u32, BitVec)> = VecDeque::from([(0, Self::INITIAL_LIGHTS)]);
 
-///
-fn recursive(target: &BitVec, lights: BitVec, buttons: &[BitVec], level: u32) -> bool {
-    if target == &lights {
-        return true;
-    }
+        loop {
+            // get first element
+            let (level, lights) = queue.pop_front().expect("Failed to get first element");
 
-    for button in buttons.iter() {
-        if recursive(target, lights.toggle(button), buttons, level + 1) {
-            return true;
+            // check if it's the target lights
+            if lights == self.lights {
+                return level;
+            }
+
+            // otherwise press each buttons combination and store to queue.
+            for button in self.buttons.iter() {
+                queue.push_back((level + 1, lights.toggle(button)));
+            }
         }
     }
-    false
 }
 
 fn parse_input(input: &str) -> Vec<Machine> {
@@ -92,6 +99,14 @@ fn parse_machine(line: &str) -> Machine {
     )
         .parse(line)
         .expect("Failed to parse input");
+
+    // convert bits to indices.
+    let lights = lights
+        .iter()
+        .enumerate()
+        .filter(|x| *x.1 > 0)
+        .map(|(index, _)| index as u8)
+        .collect::<Vec<_>>();
 
     let buttons = buttons.iter().map(|b| BitVec::new(&b)).collect::<Vec<_>>();
     Machine::new(lights, buttons, joltage)
@@ -129,10 +144,10 @@ fn parse_buttons(input: &str) -> IResult<&str, Vec<u8>> {
     .parse(input)
 }
 
-fn parse_joltage(input: &str) -> IResult<&str, Vec<u8>> {
+fn parse_joltage(input: &str) -> IResult<&str, Vec<u16>> {
     delimited(
         tag("{"),
-        separated_list1(tag(","), nom::character::complete::u8),
+        separated_list1(tag(","), nom::character::complete::u16),
         tag("}"),
     )
     .parse(input)
@@ -151,7 +166,9 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use crate::{BitVec, parse_buttons_list, parse_input, parse_joltage, parse_lights};
+    use crate::{
+        BitVec, parse_buttons_list, parse_input, parse_joltage, parse_lights, process_part1,
+    };
 
     const INPUT: &str = r#"
 [.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
@@ -197,7 +214,15 @@ mod tests {
     }
 
     #[test]
+    fn test_single_machine() {
+        let input: &str = "[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}";
+        let machines = parse_input(input);
+        assert_eq!(2, machines[0].fewest_presses());
+    }
+
+    #[test]
     fn test_part1() {
-        // TODO
+        let machines = parse_input(INPUT);
+        assert_eq!(7, process_part1(&machines));
     }
 }
