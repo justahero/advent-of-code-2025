@@ -45,13 +45,13 @@ struct Machine {
     // (3) (1,3) (2) (2,3) (0,2) (0,1)
     buttons: Vec<BitVec>,
     // joltage requirements
-    joltage: Vec<u16>,
+    joltage: Vec<i16>,
 }
 
 impl Machine {
     const INITIAL_LIGHTS: BitVec = BitVec(0);
 
-    pub fn new(lights: Vec<u8>, buttons: Vec<BitVec>, joltage: Vec<u16>) -> Self {
+    pub fn new(lights: Vec<u8>, buttons: Vec<BitVec>, joltage: Vec<i16>) -> Self {
         Self {
             lights: BitVec::new(&lights),
             buttons,
@@ -60,7 +60,7 @@ impl Machine {
     }
 
     /// Determine the number of fewest presses to match the indicator lights, e.g. `[.##.]`.
-    pub fn fewest_presses(&self) -> u32 {
+    pub fn light_presses(&self) -> u32 {
         let mut queue: VecDeque<(u32, BitVec)> = VecDeque::from([(0, Self::INITIAL_LIGHTS)]);
 
         loop {
@@ -75,6 +75,36 @@ impl Machine {
             // otherwise press each buttons combination and store to queue.
             for button in self.buttons.iter() {
                 queue.push_back((level + 1, lights.toggle(button)));
+            }
+        }
+    }
+
+    pub fn joltage_presses(&self) -> u32 {
+        let target = vec![0; self.joltage.len()];
+        let mut queue: VecDeque<(u32, Vec<i16>)> = VecDeque::from([(0, self.joltage.clone())]);
+
+        loop {
+            let (level, joltage) = queue.pop_front().expect("Failed to find joltage");
+            println!("  level: {}", level);
+
+            // check if joltage matches target
+            if target == joltage {
+                return level;
+            }
+
+            // if the joltage misses the target, do not continue
+            if joltage.iter().all(|item| *item >= 0) {
+                // update the target joltage per button
+                for button in self.buttons.iter() {
+                    let mut new_joltage = joltage.clone();
+                    for index in 0..u16::BITS {
+                        if button.0 & 1u16.shl(index) > 0 {
+                            new_joltage[index as usize] -= 1;
+                        }
+                    }
+
+                    queue.push_back((level + 1, new_joltage));
+                }
             }
         }
     }
@@ -144,17 +174,21 @@ fn parse_buttons(input: &str) -> IResult<&str, Vec<u8>> {
     .parse(input)
 }
 
-fn parse_joltage(input: &str) -> IResult<&str, Vec<u16>> {
+fn parse_joltage(input: &str) -> IResult<&str, Vec<i16>> {
     delimited(
         tag("{"),
-        separated_list1(tag(","), nom::character::complete::u16),
+        separated_list1(tag(","), nom::character::complete::i16),
         tag("}"),
     )
     .parse(input)
 }
 
 fn process_part1(machines: &[Machine]) -> u32 {
-    machines.iter().map(Machine::fewest_presses).sum::<u32>()
+    machines.iter().map(Machine::light_presses).sum::<u32>()
+}
+
+fn process_part2(machines: &[Machine]) -> u32 {
+    machines.iter().map(Machine::joltage_presses).sum::<u32>()
 }
 
 fn main() {
@@ -168,6 +202,7 @@ fn main() {
 mod tests {
     use crate::{
         BitVec, parse_buttons_list, parse_input, parse_joltage, parse_lights, process_part1,
+        process_part2,
     };
 
     const INPUT: &str = r#"
@@ -214,15 +249,28 @@ mod tests {
     }
 
     #[test]
-    fn test_single_machine() {
+    fn test_single_machine_lights() {
         let input: &str = "[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}";
         let machines = parse_input(input);
-        assert_eq!(2, machines[0].fewest_presses());
+        assert_eq!(2, machines[0].light_presses());
+    }
+
+    #[test]
+    fn test_single_machine_joltage() {
+        let input: &str = "[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}";
+        let machines = parse_input(input);
+        assert_eq!(10, machines[0].joltage_presses());
     }
 
     #[test]
     fn test_part1() {
         let machines = parse_input(INPUT);
         assert_eq!(7, process_part1(&machines));
+    }
+
+    #[test]
+    fn test_part2() {
+        let machines = parse_input(INPUT);
+        assert_eq!(33, process_part2(&machines));
     }
 }
