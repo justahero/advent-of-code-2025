@@ -36,23 +36,25 @@ fn parse_input(input: &str) -> Vec<Device> {
         .collect::<Vec<_>>()
 }
 
-fn process_part1(devices: &[Device]) -> u32 {
-    // map all devices to lookup map
-    let rack: HashMap<String, Vec<String>> = HashMap::from_iter(
-        devices
-            .iter()
-            .map(|device| (device.name.clone(), device.outputs.clone())),
+fn find_paths(rack: &HashMap<String, Vec<String>>, start: &str, end: &str) -> u32 {
+    let mut total_paths = 0u32;
+    let mut queue: VecDeque<_> = VecDeque::from_iter(
+        rack.get(start)
+            .expect(&format!("Start '{}' not found.", start)),
     );
 
-    let mut total_paths = 0u32;
-    let mut queue: VecDeque<_> = VecDeque::from_iter(rack.get("you").expect("No 'you' device"));
-
     while let Some(device) = queue.pop_front() {
-        let outputs = rack.get(device).expect("Failed to find device");
-        for output in outputs {
-            if output == "out" {
-                total_paths += 1;
-            } else {
+        if device == end {
+            total_paths += 1;
+            continue;
+        }
+
+        if device != "out" {
+            let outputs = rack
+                .get(device)
+                .expect(&format!("Failed to find device: {}", device));
+
+            for output in outputs {
                 queue.push_back(output);
             }
         }
@@ -61,15 +63,35 @@ fn process_part1(devices: &[Device]) -> u32 {
     total_paths
 }
 
-/// Start from 'srv' node, collect all paths that pass both 'fft' and 'dac' nodes, there are only two.
-fn process_part2(devices: &[Device]) -> u32 {
+fn process_part1(devices: &[Device]) -> u32 {
+    // map all devices to lookup map
     let rack: HashMap<String, Vec<String>> = HashMap::from_iter(
         devices
             .iter()
             .map(|device| (device.name.clone(), device.outputs.clone())),
     );
 
-    0
+    find_paths(&rack, "you", "out")
+}
+
+/// Start from 'srv' node, collect all paths that pass both 'fft' and 'dac' nodes, there are only two.
+fn process_part2(devices: &[Device]) -> u32 {
+    // map all devices to lookup map
+    let rack: HashMap<String, Vec<String>> = HashMap::from_iter(
+        devices
+            .iter()
+            .map(|device| (device.name.clone(), device.outputs.clone())),
+    );
+
+    // first determine the order in which "dac" & "fit" appear
+    let a = find_paths(&rack, "svr", "dac")
+        * find_paths(&rack, "dac", "fft")
+        * find_paths(&rack, "fft", "out");
+    let b = find_paths(&rack, "svr", "fft")
+        * find_paths(&rack, "fft", "dac")
+        * find_paths(&rack, "dac", "out");
+
+    a + b
 }
 
 fn main() {
