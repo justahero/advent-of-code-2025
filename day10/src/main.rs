@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::collections::VecDeque;
+use std::{collections::VecDeque, ops::Shl};
 
 use good_lp::{Expression, Solution, SolverModel, Variable, variable, variables};
 use nom::{
@@ -12,17 +12,53 @@ use nom::{
     sequence::delimited,
 };
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+struct BitVec(u16);
+
+impl BitVec {
+    /// Converts a list of indices to bits.
+    pub fn new(bits: &[u8]) -> Self {
+        let bits = bits.iter().fold(0u16, |mut bits, index| {
+            debug_assert!(*index < 16);
+            bits |= 1u16.shl(index);
+            bits
+        });
+        Self(bits)
+    }
+
+    pub fn bit_set(&self, index: u32) -> bool {
+        self.0 & 1u16.shl(index) > 0
+    }
+
+    pub fn bits(&self) -> u16 {
+        self.0
+    }
+
+    pub fn toggle(&self, rhs: &BitVec) -> Self {
+        Self(self.0 ^ rhs.0)
+    }
+}
+
+impl std::fmt::Display for BitVec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:#08b}", self.0)
+    }
+}
+
 struct Machine {
     // [.##.]
-    lights: Vec<i16>,
+    lights: BitVec,
     // (3) (1,3) (2) (2,3) (0,2) (0,1)
-    buttons: Vec<Vec<i16>>,
+    buttons: Vec<BitVec>,
     // joltage requirements
     joltage: Vec<i16>,
 }
 
 impl Machine {
-    pub fn new(lights: Vec<i16>, buttons: Vec<Vec<i16>>, joltage: Vec<i16>) -> Self {
+    pub fn new(lights: Vec<u8>, buttons: Vec<Vec<u8>>, joltage: Vec<i16>) -> Self {
+        let lights = BitVec::new(&lights);
+        let buttons = buttons.iter().map(|b| BitVec::new(&b)).collect::<Vec<_>>();
+
         Self {
             lights,
             buttons,
@@ -30,33 +66,22 @@ impl Machine {
         }
     }
 
+    const INITIAL_LIGHTS: BitVec = BitVec(0);
+
     /// Determine the number of fewest presses to match the indicator lights, e.g. `[.##.]`.
     pub fn light_presses(&self) -> u32 {
-        let mut queue: VecDeque<(u32, Vec<i16>)> =
-            VecDeque::from([(0, vec![0; self.lights.len()])]);
+        let mut queue: VecDeque<(u32, BitVec)> = VecDeque::from([(0, Self::INITIAL_LIGHTS)]);
 
         loop {
-            // get first element
-            let (level, lights) = queue.pop_front().expect("Failed to get first element");
+            let (level, lights) = queue.pop_front().expect("Failed to get first item");
 
-            // check if it's the target lights
             if lights == self.lights {
                 return level;
             }
 
             // otherwise press each buttons combination and store to queue.
             for button in self.buttons.iter() {
-                let lights = button.iter().fold(lights.clone(), |mut lights, index| {
-                    if let Some(entry) = lights.get_mut(*index as usize) {
-                        if *entry == 1 {
-                            *entry = 0;
-                        } else {
-                            *entry = 1;
-                        }
-                    }
-                    lights
-                });
-                queue.push_back((level + 1, lights));
+                queue.push_back((level + 1, lights.toggle(button)));
             }
         }
     }
@@ -78,7 +103,7 @@ impl Machine {
             let mut expression = Expression::from(0.0);
 
             for (button_index, indices) in self.buttons.iter().enumerate() {
-                if indices.contains(&(index as i16)) {
+                if indices.bit_set(index as u32) {
                     expression += presses[button_index]
                 }
             }
@@ -115,10 +140,18 @@ fn parse_machine(line: &str) -> Machine {
         .parse(line)
         .expect("Failed to parse input");
 
+    // Convert list of bits into indices
+    let lights = lights
+        .iter()
+        .enumerate()
+        .filter(|v| *v.1 > 0)
+        .map(|(index, _)| index as u8)
+        .collect::<Vec<_>>();
+
     Machine::new(lights, buttons, joltage)
 }
 
-fn parse_lights(input: &str) -> IResult<&str, Vec<i16>> {
+fn parse_lights(input: &str) -> IResult<&str, Vec<u8>> {
     delimited(
         tag("["),
         fold_many1(
@@ -137,14 +170,14 @@ fn parse_lights(input: &str) -> IResult<&str, Vec<i16>> {
     .parse(input)
 }
 
-fn parse_buttons_list(input: &str) -> IResult<&str, Vec<Vec<i16>>> {
+fn parse_buttons_list(input: &str) -> IResult<&str, Vec<Vec<u8>>> {
     separated_list1(space1, parse_buttons).parse(input)
 }
 
-fn parse_buttons(input: &str) -> IResult<&str, Vec<i16>> {
+fn parse_buttons(input: &str) -> IResult<&str, Vec<u8>> {
     delimited(
         tag("("),
-        separated_list1(tag(","), nom::character::complete::i16),
+        separated_list1(tag(","), nom::character::complete::u8),
         tag(")"),
     )
     .parse(input)
