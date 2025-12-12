@@ -39,6 +39,14 @@ impl BitVec {
     }
 }
 
+impl std::ops::BitXor for BitVec {
+    type Output = Self;
+
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        BitVec(self.0 ^ rhs.0)
+    }
+}
+
 impl std::fmt::Display for BitVec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:#08b}", self.0)
@@ -81,7 +89,7 @@ impl Machine {
 
             // otherwise press each buttons combination and store to queue.
             for button in self.buttons.iter() {
-                queue.push_back((level + 1, lights.toggle(button)));
+                queue.push_back((level + 1, lights ^ *button));
             }
         }
     }
