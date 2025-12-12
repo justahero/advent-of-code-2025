@@ -8,3 +8,4 @@ publish = false
 [dependencies]
 anyhow = "1.0.100"
 itertools = "0.14"
+# petgraph = "0.8.3"

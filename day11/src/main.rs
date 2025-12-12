@@ -36,12 +36,10 @@ fn parse_input(input: &str) -> Vec<Device> {
         .collect::<Vec<_>>()
 }
 
-fn find_paths(rack: &HashMap<String, Vec<String>>, start: &str, end: &str) -> u32 {
+fn find_paths(rack: &HashMap<&str, Vec<&str>>, start: &str, end: &str) -> u32 {
     let mut total_paths = 0u32;
-    let mut queue: VecDeque<_> = VecDeque::from_iter(
-        rack.get(start)
-            .expect(&format!("Start '{}' not found.", start)),
-    );
+    let mut queue: VecDeque<&str> = VecDeque::new();
+    queue.push_back(start);
 
     while let Some(device) = queue.pop_front() {
         if device == end {
@@ -65,33 +63,62 @@ fn find_paths(rack: &HashMap<String, Vec<String>>, start: &str, end: &str) -> u3
 
 fn process_part1(devices: &[Device]) -> u32 {
     // map all devices to lookup map
-    let rack: HashMap<String, Vec<String>> = HashMap::from_iter(
-        devices
-            .iter()
-            .map(|device| (device.name.clone(), device.outputs.clone())),
-    );
+    let rack: HashMap<&str, Vec<&str>> = HashMap::from_iter(devices.iter().map(|device| {
+        (
+            device.name.as_str(),
+            device
+                .outputs
+                .iter()
+                .map(|output| output.as_str())
+                .collect(),
+        )
+    }));
 
     find_paths(&rack, "you", "out")
 }
 
+fn find_path2(
+    devices: &HashMap<String, Vec<String>>,
+    from: &str,
+    to: &str,
+    dac: bool,
+    fft: bool,
+    cache: &mut HashMap<(String, bool, bool), u64>,
+) -> u64 {
+    if from == to {
+        return if dac && fft { 1 } else { 0 };
+    }
+
+    // check if the key has been cached.
+    if let Some(count) = cache.get(&(from.to_string(), dac, fft)) {
+        return *count;
+    }
+
+    let dac = dac || from == "dac";
+    let fft = fft || from == "fft";
+
+    if let Some(outputs) = devices.get(from) {
+        let sum = outputs
+            .iter()
+            .map(|from| find_path2(devices, from.as_str(), to, dac, fft, cache))
+            .sum();
+        cache.insert((from.to_string(), dac, fft), sum);
+        sum
+    } else {
+        0
+    }
+}
+
 /// Start from 'srv' node, collect all paths that pass both 'fft' and 'dac' nodes, there are only two.
-fn process_part2(devices: &[Device]) -> u32 {
-    // map all devices to lookup map
-    let rack: HashMap<String, Vec<String>> = HashMap::from_iter(
+fn process_part2(devices: &[Device]) -> u64 {
+    // map all devices to lookup map, for now use String
+    let devices: HashMap<String, Vec<String>> = HashMap::from_iter(
         devices
             .iter()
             .map(|device| (device.name.clone(), device.outputs.clone())),
     );
 
-    // first determine the order in which "dac" & "fit" appear
-    let a = find_paths(&rack, "svr", "dac")
-        * find_paths(&rack, "dac", "fft")
-        * find_paths(&rack, "fft", "out");
-    let b = find_paths(&rack, "svr", "fft")
-        * find_paths(&rack, "fft", "dac")
-        * find_paths(&rack, "dac", "out");
-
-    a + b
+    find_path2(&devices, "svr", "out", false, false, &mut HashMap::new())
 }
 
 fn main() {
@@ -100,6 +127,7 @@ fn main() {
     println!("PART 1: {}", result);
     let result = process_part2(&devices);
     println!("PART 2: {}", result);
+    // 2100348264 too low
 }
 
 #[cfg(test)]
