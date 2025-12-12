@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::VecDeque;
 
+use good_lp::{Expression, Solution, SolverModel, Variable, variable, variables};
 use nom::{
     IResult, Parser,
     branch::alt,
@@ -60,54 +61,37 @@ impl Machine {
         }
     }
 
+    /// For reference https://github.com/NickyMeuleman/scrapyard/blob/main/advent_of_code/2025/solutions/src/day_10.rs
     pub fn joltage_presses(&self) -> u32 {
-        let target = vec![0; self.joltage.len()];
-        let mut queue: VecDeque<(u32, Vec<i16>)> = VecDeque::from([(0, self.joltage.clone())]);
-        let mut cache: BTreeMap<Vec<i16>, u32> = BTreeMap::new();
-        let mut num_cache_hits = 0;
+        let mut vars = variables!();
 
-        loop {
-            let (level, joltage) = queue.pop_front().expect("Failed to find joltage");
+        // Map button to variable
+        let presses: Vec<Variable> = (0..self.buttons.len())
+            .map(|_| vars.add(variable().min(0).integer()))
+            .collect();
 
-            // check if joltage matches target
-            if target == joltage {
-                println!("RESULT: {}", level);
-                return level;
-            }
+        // Minimize total presses
+        let total_presses: Expression = presses.iter().sum();
+        let mut problem = vars.minimise(total_presses).using(good_lp::default_solver);
 
-            if let Some(existing_level) = cache.get(&joltage) {
-                if *existing_level < level {
-                    num_cache_hits += 1;
-                    println!(
-                        "CACHE HIT: {} - size: {}, level: {}",
-                        num_cache_hits,
-                        queue.len(),
-                        level
-                    );
-                    continue;
+        for (index, &target) in self.joltage.iter().enumerate() {
+            let mut expression = Expression::from(0.0);
+
+            for (button_index, indices) in self.buttons.iter().enumerate() {
+                if indices.contains(&(index as i16)) {
+                    expression += presses[button_index]
                 }
             }
-            cache.insert(joltage.clone(), level);
 
-            // if the joltage misses the target, do not continue
-            if joltage.iter().all(|item| *item >= 0) {
-                // update the target joltage per button
-                for button in self.buttons.iter() {
-                    let mut new_joltage = joltage.clone();
-                    let mut ignore = false;
-                    for index in button.iter() {
-                        new_joltage[*index as usize] -= 1;
-                        if new_joltage[*index as usize] < 0 {
-                            ignore = true;
-                        }
-                    }
-
-                    if !ignore {
-                        queue.push_back((level + 1, new_joltage));
-                    }
-                }
-            }
+            problem.add_constraint(expression.eq(target));
         }
+
+        let solution = problem.solve().expect("Failed to find solution");
+
+        presses
+            .iter()
+            .map(|v| solution.value(*v).round() as u32)
+            .sum::<u32>()
     }
 }
 
@@ -258,6 +242,6 @@ mod tests {
     fn test_part2_first_machine_from_input() {
         let input = "[.#.#] (0,2,3) (1,3) (2,3) (0,1,2) (0) {31,4,31,29}";
         let machines = parse_input(input);
-        assert_eq!(30, machines[0].joltage_presses());
+        assert_eq!(32, machines[0].joltage_presses());
     }
 }

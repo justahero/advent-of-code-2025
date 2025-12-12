@@ -7,5 +7,6 @@ publish = false
 
 [dependencies]
 anyhow = "1.0.100"
+good_lp = { version = "1.14.2", features = ["microlp"], default-features = false }
 itertools = "0.14"
 nom = "8.0.0"
