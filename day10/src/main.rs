@@ -51,11 +51,11 @@ struct Machine {
     // (3) (1,3) (2) (2,3) (0,2) (0,1)
     buttons: Vec<BitVec>,
     // joltage requirements
-    joltage: Vec<i16>,
+    joltage: Vec<u16>,
 }
 
 impl Machine {
-    pub fn new(lights: Vec<u8>, buttons: Vec<Vec<u8>>, joltage: Vec<i16>) -> Self {
+    pub fn new(lights: Vec<u8>, buttons: Vec<Vec<u8>>, joltage: Vec<u16>) -> Self {
         let lights = BitVec::new(&lights);
         let buttons = buttons.iter().map(|b| BitVec::new(&b)).collect::<Vec<_>>();
 
@@ -90,7 +90,7 @@ impl Machine {
     pub fn joltage_presses(&self) -> u32 {
         let mut vars = variables!();
 
-        // Map button to variable
+        // Map buttons to variables
         let presses: Vec<Variable> = (0..self.buttons.len())
             .map(|_| vars.add(variable().min(0).integer()))
             .collect();
@@ -99,11 +99,12 @@ impl Machine {
         let total_presses: Expression = presses.iter().sum();
         let mut problem = vars.minimise(total_presses).using(good_lp::default_solver);
 
+        // Set all constraints
         for (index, &target) in self.joltage.iter().enumerate() {
             let mut expression = Expression::from(0.0);
 
-            for (button_index, indices) in self.buttons.iter().enumerate() {
-                if indices.bit_set(index as u32) {
+            for (button_index, button) in self.buttons.iter().enumerate() {
+                if button.bit_set(index as u32) {
                     expression += presses[button_index]
                 }
             }
@@ -183,10 +184,10 @@ fn parse_buttons(input: &str) -> IResult<&str, Vec<u8>> {
     .parse(input)
 }
 
-fn parse_joltage(input: &str) -> IResult<&str, Vec<i16>> {
+fn parse_joltage(input: &str) -> IResult<&str, Vec<u16>> {
     delimited(
         tag("{"),
-        separated_list1(tag(","), nom::character::complete::i16),
+        separated_list1(tag(","), nom::character::complete::u16),
         tag("}"),
     )
     .parse(input)
