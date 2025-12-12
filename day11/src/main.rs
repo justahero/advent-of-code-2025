@@ -61,15 +61,28 @@ fn process_part1(devices: &[Device]) -> u32 {
     total_paths
 }
 
+/// Start from 'srv' node, collect all paths that pass both 'fft' and 'dac' nodes, there are only two.
+fn process_part2(devices: &[Device]) -> u32 {
+    let rack: HashMap<String, Vec<String>> = HashMap::from_iter(
+        devices
+            .iter()
+            .map(|device| (device.name.clone(), device.outputs.clone())),
+    );
+
+    0
+}
+
 fn main() {
     let devices = parse_input(include_str!("input.txt"));
     let result = process_part1(&devices);
     println!("PART 1: {}", result);
+    let result = process_part2(&devices);
+    println!("PART 2: {}", result);
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse_input, process_part1};
+    use crate::{parse_input, process_part1, process_part2};
 
     const INPUT: &str = r#"
 aaa: you hhh
@@ -94,5 +107,26 @@ iii: out
     fn test_part1() {
         let devices = parse_input(INPUT);
         assert_eq!(5, process_part1(&devices));
+    }
+
+    #[test]
+    fn test_part2() {
+        let input: &str = r#"
+svr: aaa bbb
+aaa: fft
+fft: ccc
+bbb: tty
+tty: ccc
+ccc: ddd eee
+ddd: hub
+hub: fff
+eee: dac
+dac: fff
+fff: ggg hhh
+ggg: out
+hhh: out
+        "#;
+        let devices = parse_input(input);
+        assert_eq!(2, process_part2(&devices));
     }
 }
