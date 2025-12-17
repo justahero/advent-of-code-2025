@@ -1,15 +1,28 @@
 #![allow(dead_code)]
 
-use std::{collections::HashSet, str::FromStr};
+use std::{collections::HashSet, fmt::Display, str::FromStr};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Shape {
     /// 3x3 grid
     grid: [u8; 9],
 }
 
 impl Shape {
+    /// The list of all variants a 3x3 block can be rotated / flipped.
+    const VARIANTS: [[u8; 9]; 8] = [
+        [0, 1, 2, 3, 4, 5, 6, 7, 8],
+        [6, 3, 0, 7, 4, 1, 8, 5, 2],
+        [8, 7, 6, 5, 4, 3, 2, 1, 0],
+        [2, 5, 8, 1, 4, 7, 0, 3, 6],
+        [6, 7, 8, 3, 4, 5, 0, 1, 2],
+        [8, 5, 2, 7, 4, 1, 6, 3, 0],
+        [2, 1, 0, 5, 4, 3, 8, 7, 6],
+        [0, 3, 6, 1, 4, 7, 2, 5, 8],
+    ];
+
     pub fn new(bytes: &[u8]) -> Self {
+        println!("BYTES: {:?}", bytes);
         debug_assert!(bytes.len() == 9);
         Self {
             grid: bytes.try_into().unwrap(),
@@ -18,11 +31,29 @@ impl Shape {
 
     /// Returns a list of all shape variants
     pub fn variants(&self) -> HashSet<Shape> {
-        todo!("")
+        HashSet::from_iter(Self::VARIANTS.iter().map(|variant| {
+            Shape::from_iter(variant.iter().map(|index| self.grid[*index as usize]))
+        }))
     }
+}
 
-    pub fn flip_x(&self) -> Self {
-        todo!("")
+impl Display for Shape {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for y in 0..3 {
+            for x in 0..3 {
+                let index = y * 3 + x;
+                write!(f, "{}", self.grid[index])?;
+            }
+            writeln!(f, "")?;
+        }
+        Ok(())
+    }
+}
+
+impl FromIterator<u8> for Shape {
+    fn from_iter<T: IntoIterator<Item = u8>>(iter: T) -> Self {
+        let bytes: Vec<u8> = iter.into_iter().collect();
+        Self::new(bytes.as_slice())
     }
 }
 
@@ -32,7 +63,6 @@ impl FromStr for Shape {
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         let grid = input
             .lines()
-            .skip(1)
             .flat_map(|line| line.as_bytes())
             .cloned()
             .collect::<Vec<_>>();
@@ -59,7 +89,10 @@ fn parse_input(input: &str) -> TreeFarm {
 
     let shapes = shapes
         .iter()
-        .map(|block| block.parse::<Shape>().expect("Failed to parse shape"))
+        .map(|block| {
+            let (_index, block) = block.split_once("\n").unwrap();
+            block.parse::<Shape>().expect("Failed to parse shape")
+        })
         .collect::<Vec<_>>();
 
     dbg!(&shapes, &trees);
@@ -121,6 +154,18 @@ mod tests {
 #..
 ###"#;
         assert!(input.parse::<Shape>().is_ok());
+    }
+
+    #[test]
+    fn test_shape_variants() {
+        let input: &str = "#..\n#.#\n...";
+        assert_eq!(8, input.parse::<Shape>().unwrap().variants().len());
+        let input: &str = "###\n###\n.#.";
+        assert_eq!(4, input.parse::<Shape>().unwrap().variants().len());
+        let input: &str = "###\n###\n.#.";
+        assert_eq!(4, input.parse::<Shape>().unwrap().variants().len());
+        let input: &str = "#.#\n###\n#.#";
+        assert_eq!(2, input.parse::<Shape>().unwrap().variants().len());
     }
 
     #[test]
