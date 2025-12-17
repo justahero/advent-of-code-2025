@@ -1,6 +1,7 @@
 #![allow(dead_code)]
+#![allow(unused_variables)]
 
-use std::{collections::HashSet, fmt::Display, ops::Index, str::FromStr};
+use std::{collections::HashSet, ops::Index, str::FromStr};
 
 use nom::{IResult, Parser, bytes::complete::tag, multi::separated_list1};
 
@@ -46,19 +47,6 @@ impl Index<usize> for Shape {
     }
 }
 
-impl Display for Shape {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for y in 0..3 {
-            for x in 0..3 {
-                let index = y * 3 + x;
-                write!(f, "{}", self.grid[index])?;
-            }
-            writeln!(f, "")?;
-        }
-        Ok(())
-    }
-}
-
 impl FromIterator<u8> for Shape {
     fn from_iter<T: IntoIterator<Item = u8>>(iter: T) -> Self {
         let bytes: Vec<u8> = iter.into_iter().collect();
@@ -84,6 +72,16 @@ impl FromStr for Shape {
 struct Region {
     width: u16,
     height: u16,
+}
+
+impl Region {
+    pub fn new(width: u16, height: u16) -> Self {
+        Self { width, height }
+    }
+
+    pub fn area(&self) -> u32 {
+        self.width as u32 * self.height as u32
+    }
 }
 
 #[derive(Debug)]
@@ -129,13 +127,32 @@ fn parse_input(input: &str) -> TreeFarm {
     TreeFarm { shapes, regions }
 }
 
+fn solve_single_region(shapes: &[Shape], region: &Region, trees: &[u8]) -> bool {
+    // ignore all regions whose area can easily contain all trees
+    if region.area() >= trees.iter().map(|v| *v as u32).sum::<u32>() * 9 {
+        return true;
+    }
+
+    false
+}
+
+fn process_part1(farm: &TreeFarm) -> usize {
+    farm.regions
+        .iter()
+        .filter(|(region, trees)| solve_single_region(&farm.shapes, region, trees))
+        .count()
+}
+
 fn main() {
-    // TODO
+    let input = parse_input(include_str!("input.txt"));
+    let result = process_part1(&input);
+    println!("PART 1: {}", result);
+    // TODO: most likely larger than 422
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{Shape, parse_input, parse_region};
+    use crate::{Region, Shape, parse_input, parse_region, process_part1, solve_single_region};
 
     const INPUT: &str = r#"0:
 ###
@@ -195,6 +212,13 @@ mod tests {
     }
 
     #[test]
+    fn test_single_region() {
+        let a = "###\n###\n#.#".parse::<Shape>().unwrap();
+        let b = "###\n.#.\n###".parse::<Shape>().unwrap();
+        assert!(solve_single_region(&[a, b], &Region::new(3, 5), &[1, 1]));
+    }
+
+    #[test]
     fn test_shape_variants() {
         let input: &str = "#..\n#.#\n...";
         assert_eq!(8, input.parse::<Shape>().unwrap().variants().len());
@@ -208,6 +232,7 @@ mod tests {
 
     #[test]
     fn test_part1() {
-        // TODO
+        let farm = parse_input(INPUT);
+        assert_eq!(2, process_part1(&farm));
     }
 }
