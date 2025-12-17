@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
-use std::{collections::HashSet, fmt::Display, str::FromStr};
+use std::{collections::HashSet, fmt::Display, ops::Index, str::FromStr};
+
+use nom::{IResult, Parser, bytes::complete::tag, multi::separated_list1};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Shape {
@@ -9,7 +11,7 @@ struct Shape {
 }
 
 impl Shape {
-    /// The list of all variants a 3x3 block can be rotated / flipped.
+    /// The list of all variants a 3x3 block can be rotated / flipped to.
     const VARIANTS: [[u8; 9]; 8] = [
         [0, 1, 2, 3, 4, 5, 6, 7, 8],
         [6, 3, 0, 7, 4, 1, 8, 5, 2],
@@ -22,7 +24,6 @@ impl Shape {
     ];
 
     pub fn new(bytes: &[u8]) -> Self {
-        println!("BYTES: {:?}", bytes);
         debug_assert!(bytes.len() == 9);
         Self {
             grid: bytes.try_into().unwrap(),
@@ -34,6 +35,14 @@ impl Shape {
         HashSet::from_iter(Self::VARIANTS.iter().map(|variant| {
             Shape::from_iter(variant.iter().map(|index| self.grid[*index as usize]))
         }))
+    }
+}
+
+impl Index<usize> for Shape {
+    type Output = [u8];
+
+    fn index(&self, y: usize) -> &Self::Output {
+        &self.grid[y * 3..y * 3 + 3]
     }
 }
 
@@ -80,7 +89,28 @@ struct Region {
 #[derive(Debug)]
 struct TreeFarm {
     shapes: Vec<Shape>,
-    regions: Vec<(Region, Vec<u16>)>,
+    regions: Vec<(Region, Vec<u8>)>,
+}
+
+fn parse_u16(input: &str) -> IResult<&str, u16> {
+    nom::character::complete::u16(input)
+}
+
+fn parse_u8(input: &str) -> IResult<&str, u8> {
+    nom::character::complete::u8(input)
+}
+
+fn parse_region(line: &str) -> (Region, Vec<u8>) {
+    let (_, (width, _, height, _, indices)) = (
+        parse_u16,
+        tag("x"),
+        parse_u16,
+        tag(": "),
+        separated_list1(tag(" "), parse_u8),
+    )
+        .parse(line)
+        .expect("Failed to parse line");
+    (Region { width, height }, indices)
 }
 
 fn parse_input(input: &str) -> TreeFarm {
@@ -95,9 +125,8 @@ fn parse_input(input: &str) -> TreeFarm {
         })
         .collect::<Vec<_>>();
 
-    dbg!(&shapes, &trees);
-
-    todo!("")
+    let regions: Vec<(Region, Vec<u8>)> = trees.lines().map(parse_region).collect();
+    TreeFarm { shapes, regions }
 }
 
 fn main() {
@@ -106,7 +135,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Shape, parse_input};
+    use crate::{Shape, parse_input, parse_region};
 
     const INPUT: &str = r#"0:
 ###
@@ -146,6 +175,15 @@ mod tests {
     fn test_parse() {
         let farm = parse_input(INPUT);
         assert_eq!(6, farm.shapes.len());
+    }
+
+    #[test]
+    fn test_parse_region() {
+        let input = "12x5: 1 0 1 0 2 2";
+        let (region, indices) = parse_region(input);
+        assert_eq!(vec![1, 0, 1, 0, 2, 2], indices);
+        assert_eq!(12, region.width);
+        assert_eq!(5, region.height);
     }
 
     #[test]
